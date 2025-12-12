@@ -9,7 +9,7 @@ async function main() {
   console.log('Starting admin creation...');
 
   // change password if you want
-  const hashedPassword = await bcrypt.hash('admin1234', 10);
+  const hashedPassword = await bcrypt.hash('admin1212', 10);
 
   // avoid duplicate admin: upsert pattern
   const admin = await prisma.user.upsert({

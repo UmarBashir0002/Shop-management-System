@@ -1,25 +1,45 @@
 import express from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
 
-const router = express.Router();
 const prisma = new PrismaClient();
+const router = express.Router();
 
-// POST /auth/login
 router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-
   try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username and password are required." });
+    }
+
     const user = await prisma.user.findUnique({ where: { username } });
-    if (!user) return res.status(401).json({ message: "User not found" });
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(401).json({ message: "Invalid password" });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
 
-    res.json({ message: "Login successful", user });
-  } catch (err) {
-    console.error("Error in login:", err);
-    res.status(500).json({ message: "Server error" });
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      process.env.JWT_SECRET, // define JWT_SECRET in your .env file
+      { expiresIn: "1h" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Internal server error." });
   }
 });
 
