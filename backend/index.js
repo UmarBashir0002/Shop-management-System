@@ -7,6 +7,10 @@ import userRoutes from "./routes/user.js";
 import itemsRoutes from './routes/items.js';
 import stockRoutes from './routes/stock.js';
 import orderRoutes from './routes/orders.js';
+import printJobRoutes from './routes/printJobs.js';
+import reports from './routes/reports.js';
+
+
 
 
 console.log("loaded")
@@ -20,6 +24,10 @@ app.use("/user", userRoutes);
 app.use('/items', itemsRoutes);
 app.use('/stock', stockRoutes);
 app.use('/orders', orderRoutes);
+app.use('/printJobs', printJobRoutes);
+app.use('/reports', reports);
+
+
 
 
 
