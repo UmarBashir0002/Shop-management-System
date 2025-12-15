@@ -4,6 +4,8 @@ import { authenticateToken } from '../middleware/auth.js'; // your middleware
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
+import { validate } from "../middleware/validate.js";
+import { createItemSchema ,updateItemSchema } from "../validators/item.schema.js";
 
 const router = express.Router();
 const ALLOWED_TYPES = ['PRINTER','LAPTOP','ACCESSORY','SERVICE'];
@@ -23,7 +25,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // CREATE item (protected)
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, validate(createItemSchema),async (req, res) => {
   try {
     const { name, brand, type, costPrice, salePrice, quantity } = req.body;
     if (!name || !type) return res.status(400).json({ message: 'name and type are required' });
@@ -41,7 +43,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // UPDATE item (protected)
-router.patch('/:id', authenticateToken, async (req, res) => {
+router.patch('/:id', authenticateToken, validate(updateItemSchema), async (req, res) => {
   const id = Number(req.params.id);
   try {
     const data = req.body;

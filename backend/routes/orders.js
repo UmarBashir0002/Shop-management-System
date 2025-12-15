@@ -1,13 +1,16 @@
 import express from 'express';
 import pkg from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
+import { validate } from "../middleware/validate.js";
+import { createOrderSchema } from "../validators/order.schema.js";
+
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 const router = express.Router();
 
 // CREATE an order (protected)
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, validate(createOrderSchema), async (req, res) => {
   const { items } = req.body; // [{ itemId, quantity }]
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'Items are required' });

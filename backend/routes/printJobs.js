@@ -3,6 +3,8 @@
 import express from 'express';
 import pkg from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
+import { validate } from "../middleware/validate.js";
+import { createPrintJobSchema } from "../validators/item.schema.js";
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
@@ -11,7 +13,7 @@ const router = express.Router();
 /**
  * Create a new print job
  */
-router.post("/", authenticateToken, async (req, res) => {
+router.post("/", authenticateToken, validate(createPrintJobSchema), async (req, res) => {
   try {
     const { customer_name, pages, rate } = req.body;
 

@@ -2,11 +2,13 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
+import { validate } from "../middleware/validate.js";
+import { loginSchema } from "../validators/auth.schema.js";
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-router.post("/login", async (req, res) => {
+router.post("/login",validate(loginSchema), async (req, res) => {
   try {
     const { username, password } = req.body;
 
