@@ -4,7 +4,7 @@ import express from 'express';
 import pkg from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from "../middleware/validate.js";
-import { createPrintJobSchema } from "../validators/item.schema.js";
+import { createPrintJobSchema } from "../validators/printJob.js";
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();

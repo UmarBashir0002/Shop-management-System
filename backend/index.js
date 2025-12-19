@@ -9,6 +9,7 @@ import stockRoutes from './routes/stock.js';
 import orderRoutes from './routes/orders.js';
 import printJobRoutes from './routes/printJobs.js';
 import reports from './routes/reports.js';
+import helmet from "helmet";
 
 
 
@@ -26,6 +27,7 @@ app.use('/stock', stockRoutes);
 app.use('/orders', orderRoutes);
 app.use('/printJobs', printJobRoutes);
 app.use('/reports', reports);
+app.use(helmet());
 
 
 

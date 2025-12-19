@@ -52,6 +52,6 @@ model printJob {
   pages          Int      @default(0)
   rate           Float?
   total_amount   Float?
-  payment_status String   @default("UNPAID")
+  payment_status String   @default("PAID")
   date           DateTime @default(now())
 }
