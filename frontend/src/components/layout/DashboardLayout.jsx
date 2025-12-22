@@ -1,7 +1,8 @@
 import React from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom"; // Added useNavigate
 import { useSelector, useDispatch } from "react-redux";
 import { toggleSidebar } from "../../store/uiSlice";
+import { logout } from "../../store/authSlice"; // Import the logout action
 import { 
   HomeIcon, 
   CubeIcon, 
@@ -12,16 +13,25 @@ import {
   UserCircleIcon,
   ArrowRightOnRectangleIcon
 } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast"; // Recommended for feedback
 
 export default function DashboardLayout({ children }) {
   const sidebarOpen = useSelector((s) => s.ui.sidebarOpen);
+  const user = useSelector((s) => s.auth.user); // Get user data from store
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  const handleSignOut = () => {
+    dispatch(logout());
+    toast.success("Signed out successfully");
+    navigate("/login"); // Redirect to login page
+  };
 
   const navItems = [
     { name: "Dashboard", to: "/dashboard", icon: HomeIcon },
     { name: "Items", to: "/products", icon: CubeIcon },
     { name: "Orders", to: "/orders", icon: ShoppingCartIcon },
-    { name: "Print Jobs", to: "/print-jobs", icon: PrinterIcon },
+    { name: "Categories", to: "/categories", icon: PrinterIcon },
     { name: "Settings", to: "/settings/profile", icon: Cog6ToothIcon },
   ];
 
@@ -38,7 +48,7 @@ export default function DashboardLayout({ children }) {
             <div className="bg-indigo-600 p-2 rounded-lg">
               <CubeIcon className="w-6 h-6 text-white" />
             </div>
-            {sidebarOpen && <span className="font-bold text-xl text-white tracking-tight">Kashmir Computer</span>}
+            {sidebarOpen && <span className="font-bold text-xl text-white tracking-tight">Computer</span>}
           </div>
         </div>
 
@@ -58,7 +68,7 @@ export default function DashboardLayout({ children }) {
               <item.icon className={`w-6 h-6 flex-shrink-0 ${sidebarOpen ? "" : "mx-auto"}`} />
               {sidebarOpen && <span className="font-medium">{item.name}</span>}
               {!sidebarOpen && (
-                <div className="absolute left-20 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="absolute left-20 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   {item.name}
                 </div>
               )}
@@ -80,15 +90,20 @@ export default function DashboardLayout({ children }) {
 
           <div className="flex items-center gap-6">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-sm font-bold text-slate-900">Admin User</span>
-              <span className="text-xs text-slate-500">Super Admin</span>
+              <span className="text-sm font-bold text-slate-900">{user?.name || 'Admin User'}</span>
+              <span className="text-xs text-slate-500">{user?.role || 'Super Admin'}</span>
             </div>
             <div className="relative group">
               <UserCircleIcon className="w-10 h-10 text-slate-300 cursor-pointer hover:text-indigo-600 transition-colors" />
-              {/* Dropdown Placeholder */}
+              
+              {/* Dropdown Menu */}
               <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-2 opacity-0 group-hover:opacity-100 transition-all pointer-events-none group-hover:pointer-events-auto">
                 <Link to="/settings/profile" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Your Profile</Link>
-                <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                <hr className="my-1 border-slate-100" />
+                <button 
+                  onClick={handleSignOut}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                >
                   <ArrowRightOnRectangleIcon className="w-4 h-4" /> Sign Out
                 </button>
               </div>

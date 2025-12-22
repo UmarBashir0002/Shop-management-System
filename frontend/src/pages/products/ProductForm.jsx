@@ -1,19 +1,22 @@
 import React, { useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import DashboardLayout from '../../components/layout/DashboardLayout'
 import Input from '../../components/common/Input'
 import Button from '../../components/common/Button'
+import Loader from '../../components/common/Loader'
 import { useCreateItem, useUpdateItem, useItemQuery } from '../../hooks/useProducts'
+import { useCategoriesQuery } from '../../hooks/useCategories' // 1. Import Category Hook
 
-// 1. Validation Schema
+// 2. Updated Validation Schema
 const productSchema = z
   .object({
     name: z.string().min(4, 'Name must be at least 4 characters'),
     brand: z.string().min(1, 'Brand required'),
-    type: z.string().min(1, 'Please select a type'),
+    // Changed from 'type' string to 'categoryId' number
+    categoryId: z.preprocess((val) => Number(val), z.number().min(1, 'Please select a category')),
     costPrice: z.number().min(0, 'Required'),
     salePrice: z.number().min(0, 'Required'),
     quantity: z.number().min(0, 'Required'),
@@ -24,12 +27,15 @@ const productSchema = z
     path: ['salePrice'],
   })
 
-const CATEGORIES = ['PRINTER', 'LAPTOP', 'ACCESSORY', 'SERVICE']
+// ... (imports and schema remain exactly the same)
 
 export default function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { data: itemData } = useItemQuery(id)
+  
+  const { data: categories, isLoading: catsLoading } = useCategoriesQuery()
+  const { data: itemData, isLoading: itemLoading } = useItemQuery(id)
+  
   const createMutation = useCreateItem()
   const updateMutation = useUpdateItem()
 
@@ -44,13 +50,29 @@ export default function ProductForm() {
   })
 
   useEffect(() => {
-    if (itemData) reset(itemData)
+    if (itemData) {
+      reset({
+        ...itemData,
+        // Ensure we only try to stringify if the ID actually exists
+        categoryId: itemData.categoryId ? itemData.categoryId.toString() : ""
+      })
+    }
   }, [itemData, reset])
 
   const onSubmit = async (values) => {
     if (id) await updateMutation.mutateAsync({ id, payload: values })
     else await createMutation.mutateAsync(values)
     navigate('/products')
+  }
+
+  if (catsLoading || (id && itemLoading)) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center min-h-[400px]">
+          <Loader />
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
@@ -66,24 +88,44 @@ export default function ProductForm() {
           <div className="grid grid-cols-2 gap-4">
             <Input label="Brand" {...register('brand')} error={errors.brand?.message} />
 
-            {/* Simplified Styled Dropdown */}
             <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-slate-700">Category Type</label>
               <select
-                {...register('type')}
-                className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                {...register('categoryId')}
+                className={`w-full p-2.5 bg-slate-50 border ${
+                  errors.categoryId ? 'border-red-500' : 'border-slate-300'
+                } rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all`}
               >
-                <option value="">Select Type</option>
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
+                <option value="">Select Category</option>
+                
+                {/* SAFE CHECK: 
+                  Only map if categories is an array and has at least one item 
+                */}
+                {Array.isArray(categories) && categories.length > 0 ? (
+                  categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))
+                ) : (
+                  <option disabled value="">No Categories Available</option>
+                )}
               </select>
-              {errors.type && <span className="text-red-500 text-xs">{errors.type.message}</span>}
+              
+              {/* Show a helpful message if the list is empty */}
+              {!catsLoading && (!categories || categories.length === 0) && (
+                <span className="text-amber-600 text-[10px] font-medium">
+                  Please create a category first in the Category Settings.
+                </span>
+              )}
+
+              {errors.categoryId && (
+                <span className="text-red-500 text-xs">{errors.categoryId.message}</span>
+              )}
             </div>
           </div>
 
+          {/* ... (rest of the prices, stock, and buttons remain exactly the same) */}
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Cost Price"

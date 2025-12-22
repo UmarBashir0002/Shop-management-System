@@ -1,7 +1,14 @@
-import React, { useMemo, useState, useEffect } from "react"; // 1. Added useState & useEffect
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { EyeIcon, PencilSquareIcon, TrashIcon, PlusIcon, CalendarIcon } from "@heroicons/react/24/outline";
+import { 
+  EyeIcon, 
+  PencilSquareIcon, 
+  TrashIcon, 
+  PlusIcon, 
+  CalendarIcon,
+  BanknotesIcon 
+} from "@heroicons/react/24/outline";
 import Button from "../../components/common/Button";
 import Loader from "../../components/common/Loader";
 import { useOrdersQuery, useDeleteOrder } from "../../hooks/useOrders";
@@ -9,16 +16,16 @@ import OrderTable from "./OrderTable";
 
 export default function OrderList() {
   const navigate = useNavigate();
-  const [filterRange, setFilterRange] = useState("all"); // 2. Filter State
+  const [filterRange, setFilterRange] = useState("all");
   const { data, isLoading, isError, error, refetch } = useOrdersQuery();
   const deleteMutation = useDeleteOrder();
 
-  // Refresh data on mount
+  // Refresh data on mount to catch database changes
   useEffect(() => {
     refetch();
   }, [refetch]);
 
-  // 3. Filter Logic
+  // Filter Logic
   const filteredOrders = useMemo(() => {
     let rawOrders = [];
     if (Array.isArray(data)) rawOrders = data;
@@ -75,57 +82,86 @@ export default function OrderList() {
 
   const columns = [
     {
-      title: "Order",
+      title: "Order Info",
       key: "id",
       render: (row) => (
         <div className="flex flex-col">
           <span className="font-bold text-slate-800">#{row.id}</span>
-          <span className="text-xs text-slate-400">{new Date(row.createdAt).toLocaleString()}</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400">
+            {new Date(row.createdAt).toLocaleDateString()}
+          </span>
         </div>
       ),
     },
     {
-      title: "Items",
-      key: "items",
+      title: "Payment Status",
+      key: "status",
       render: (row) => {
-        const items = row?.items ?? row?.OrderItem ?? [];
+        const colors = {
+          PAID: "bg-green-100 text-green-700 border-green-200",
+          PARTIAL: "bg-orange-100 text-orange-700 border-orange-200",
+          UNPAID: "bg-red-100 text-red-700 border-red-200",
+        };
         return (
-          <div className="text-sm text-slate-600 max-w-xs truncate">
-            {items.length > 0 ? items.map((it, idx) => (
-              <span key={idx} className="inline-block mr-2">
-                {it.name ?? `#${it.itemId}`} x{it.quantity}
-              </span>
-            )) : <span className="text-xs text-gray-400">—</span>}
-          </div>
+          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-wider ${colors[row.status] || colors.PAID}`}>
+            {row.status || "PAID"}
+          </span>
         );
       },
     },
     {
-      title: "Total",
+      title: "Finances",
       key: "total",
-      render: (row) => <span className="font-semibold text-green-600">Rs. {row.total}</span>,
+      render: (row) => (
+        <div className="flex flex-col">
+          <span className="font-bold text-slate-900">Rs. {row.total?.toLocaleString()}</span>
+          <div className="flex items-center gap-1 text-[10px] font-medium text-slate-500">
+            <span>Paid: Rs. {row.paidAmount?.toLocaleString() || 0}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Balance",
+      key: "balance",
+      render: (row) => {
+        const balance = (row.total || 0) - (row.paidAmount || 0);
+        return (
+          <span className={`font-bold text-sm ${balance > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+            {balance > 0 ? `Rs. ${balance.toLocaleString()}` : "Settled"}
+          </span>
+        );
+      },
     },
     {
       title: "Actions",
       key: "actions",
       render: (row) => (
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(`/orders/${row.id}`)} title="View">
-            <EyeIcon className="w-5 h-5 text-slate-400 hover:text-indigo-600" />
+          <button 
+            onClick={() => navigate(`/orders/${row.id}`)} 
+            className="p-1.5 hover:bg-indigo-50 rounded-lg transition-colors group"
+            title="View Details"
+          >
+            <EyeIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-600" />
           </button>
-          <button onClick={() => navigate(`/orders/${row.id}/edit`)} title="Edit">
-            <PencilSquareIcon className="w-5 h-5 text-slate-400 hover:text-blue-600" />
+          <button 
+            onClick={() => navigate(`/orders/${row.id}/edit`)} 
+            className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
+            title="Edit Order"
+          >
+            <PencilSquareIcon className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
           </button>
           <button
             onClick={() => {
-              if (!confirm("Delete this order?")) return;
+              if (!confirm("Are you sure? This will delete the order and restore product stock.")) return;
               deleteMutation.mutate(row.id);
             }}
-            title="Delete"
-            className="disabled:opacity-50"
+            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group disabled:opacity-30"
             disabled={deleteMutation.isPending}
+            title="Delete Order"
           >
-            <TrashIcon className="w-5 h-5 text-slate-400 hover:text-red-600" />
+            <TrashIcon className="w-5 h-5 text-slate-400 group-hover:text-red-600" />
           </button>
         </div>
       ),
@@ -136,29 +172,29 @@ export default function OrderList() {
     <DashboardLayout>
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Orders</h1>
-          <p className="text-slate-500 text-sm">View and filter your transactions.</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Orders</h1>
+          <p className="text-slate-500 text-sm font-medium">Manage transactions and track partial payments.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* 4. Date Filter Dropdown */}
+          {/* Date Filter Dropdown */}
           <div className="relative">
             <CalendarIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <select
               value={filterRange}
               onChange={(e) => setFilterRange(e.target.value)}
-              className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm hover:border-slate-300 transition-all"
+              className="pl-9 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm hover:border-slate-300 transition-all"
             >
-              <option value="all">All Time</option>
-              <option value="day">Today</option>
-              <option value="week">This Week</option>
+              <option value="all">All Transactions</option>
+              <option value="day">Today's Sales</option>
+              <option value="week">Last 7 Days</option>
               <option value="month">This Month</option>
             </select>
           </div>
 
           <Button 
             onClick={() => navigate("/orders/new")} 
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-indigo-600 shadow-indigo-200 shadow-lg"
           >
             <PlusIcon className="w-5 h-5" />
             New Order
@@ -166,17 +202,20 @@ export default function OrderList() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         {filteredOrders.length > 0 ? (
           <OrderTable columns={columns} data={filteredOrders} />
         ) : (
-          <div className="p-20 text-center">
-            <p className="text-slate-400 mb-2">No orders found for this period.</p>
+          <div className="p-24 text-center">
+            <div className="inline-flex p-4 bg-slate-50 rounded-full mb-4">
+              <BanknotesIcon className="w-8 h-8 text-slate-300" />
+            </div>
+            <p className="text-slate-400 font-medium mb-2">No orders found for the selected period.</p>
             <button 
               onClick={() => setFilterRange("all")} 
-              className="text-indigo-600 text-sm font-bold hover:underline"
+              className="text-indigo-600 text-sm font-black hover:text-indigo-700"
             >
-              Show all orders
+              Clear all filters
             </button>
           </div>
         )}

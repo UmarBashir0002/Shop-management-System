@@ -3,11 +3,13 @@ import { createSlice } from "@reduxjs/toolkit";
 
 const persisted = JSON.parse(localStorage.getItem("shop_auth") || "null");
 
-const initialState = persisted || {
-  user: null,
-  token: null,
-  isAuthenticated: false,
-};
+const initialState = persisted 
+  ? { ...persisted, isAuthenticated: !!persisted.token } 
+  : {
+      user: null,
+      token: null,
+      isAuthenticated: false,
+    };
 
 const authSlice = createSlice({
   name: "auth",
@@ -17,10 +19,15 @@ const authSlice = createSlice({
       const { user, token } = action.payload || {};
       state.user = user ?? state.user;
       state.token = token ?? state.token;
-      state.isAuthenticated = !!(state.token);
+      state.isAuthenticated = !!(token || state.token);
+      
       localStorage.setItem(
         "shop_auth",
-        JSON.stringify({ user: state.user, token: state.token })
+        JSON.stringify({ 
+          user: state.user, 
+          token: state.token, 
+          isAuthenticated: state.isAuthenticated 
+        })
       );
     },
     logout(state) {

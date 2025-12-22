@@ -1,136 +1,251 @@
-import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import { useOrderQuery } from "../../hooks/useOrders"; // 🔁 Changed to useOrders hook
-import Button from "../../components/common/Button";
+import React, { useState, useMemo } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import DashboardLayout from '../../components/layout/DashboardLayout'
+import Button from '../../components/common/Button'
+import Loader from '../../components/common/Loader'
+import Input from '../../components/common/Input'
+import { useOrderQuery, useCreateOrder, useUpdateOrder } from '../../hooks/useOrders'
+import { useItemsQuery } from '../../hooks/useProducts'
+import { useCategoriesQuery } from '../../hooks/useCategories'
 import { 
+  PlusIcon, 
+  TrashIcon, 
   ArrowLeftIcon, 
-  CalendarIcon, 
-  HashtagIcon, 
-  BanknotesIcon, 
-  ShoppingBagIcon 
-} from "@heroicons/react/24/outline";
+  PencilSquareIcon 
+} from '@heroicons/react/24/outline'
+import toast from 'react-hot-toast'
 
-export default function OrderDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const { data: order, isLoading } = useOrderQuery(id); // 🔁 Fetching order data
+export default function OrderForm() {
+  const { id } = useParams()
+  const isEditMode = Boolean(id)
+  const navigate = useNavigate()
 
-  if (isLoading) return <div className="p-10 text-center text-slate-500">Loading Order...</div>;
-  if (!order) return <div className="p-10 text-center text-red-500">Order not found.</div>;
+  const { data: order, isLoading: orderLoading } = useOrderQuery(id)
+  const { data: products, isLoading: productsLoading } = useItemsQuery()
+  const { data: categories, isLoading: categoriesLoading } = useCategoriesQuery()
 
-  // Defensive check for items list (backend might return .items or .OrderItem)
-  const items = order.items ?? order.OrderItem ?? [];
+  const createMutation = useCreateOrder()
+  const updateMutation = useUpdateOrder()
+
+  const [items, setItems] = useState([])
+  const [lastSyncedId, setLastSyncedId] = useState(null)
+
+  const allProducts = useMemo(() => products?.data || products || [], [products])
+  const allCategories = useMemo(() => categories || [], [categories])
+
+  /**
+   * DATA SYNCHRONIZATION
+   * Ensures 'name' is Uppercase to match dropdown values and selects the correct category
+   */
+  if (isEditMode && order && allProducts.length > 0 && lastSyncedId !== id) {
+    const backendItems = order.items ?? order.OrderItem ?? []
+    const mappedItems = backendItems.map((it) => {
+      const matchedProduct = allProducts.find((p) => p.id === it.itemId)
+      
+      return {
+        itemId: it.itemId ?? '',
+        // Use the categoryId from the product master list to ensure filtering works
+        categoryId: matchedProduct?.categoryId ?? it.item?.categoryId ?? '',
+        // Force Uppercase to ensure the <select> matches the <option value="...">
+        name: (matchedProduct?.name || it.name || '').toUpperCase(),
+        price: it.price ?? 0,
+        quantity: it.quantity ?? 1,
+        stock: matchedProduct?.quantity ?? 0,
+      }
+    })
+    
+    setItems(mappedItems)
+    setLastSyncedId(id)
+  }
+
+  const addItemRow = () =>
+    setItems((prev) => [...prev, { itemId: '', name: '', categoryId: '', price: 0, quantity: 1, stock: 0 }])
+
+  const removeItemRow = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx))
+
+  const updateItem = (idx, field, value) => {
+    setItems((prev) => {
+      const copy = [...prev]
+      let updatedRow = { ...copy[idx], [field]: value }
+
+      if (field === 'categoryId') {
+        updatedRow.itemId = ''; updatedRow.name = ''; updatedRow.price = 0; updatedRow.stock = 0;
+      }
+
+      if (field === 'name') {
+        // Find product by comparing Uppercase names
+        const selectedProd = allProducts.find((p) => p.name.toUpperCase() === value.toUpperCase())
+        if (selectedProd) {
+          updatedRow.itemId = selectedProd.id
+          updatedRow.price = selectedProd.salePrice
+          updatedRow.stock = selectedProd.quantity
+          updatedRow.name = selectedProd.name.toUpperCase()
+        }
+      }
+
+      copy[idx] = updatedRow
+      return copy
+    })
+  }
+
+  const total = useMemo(
+    () => items.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0),
+    [items]
+  )
+
+  const isStockAvailable = useMemo(() => {
+    if (items.length === 0) return true
+    return items.every(it => {
+      if (!it.itemId) return true 
+      return it.stock > 0 && Number(it.quantity) <= it.stock
+    })
+  }, [items])
+
+  const onSubmit = async (e) => {
+    e.preventDefault()
+    if (!isStockAvailable) return toast.error('Check item availability')
+    
+    const validItems = items.filter((i) => i.itemId && Number(i.quantity) > 0)
+    if (!validItems.length) return toast.error('Add at least one item')
+
+    const payload = {
+      items: validItems.map((i) => ({ itemId: Number(i.itemId), quantity: Number(i.quantity) })),
+    }
+
+    try {
+      if (isEditMode) await updateMutation.mutateAsync({ id, payload })
+      else await createMutation.mutateAsync(payload)
+      navigate('/orders')
+      toast.success(isEditMode ? 'Order updated' : 'Order completed')
+    } catch (err) {
+      return err
+    }
+  }
+
+  if ((isEditMode && orderLoading) || productsLoading || categoriesLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center py-20"><Loader /></div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
-      {/* 1. Back Navigation & Action Header */}
-      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
-        <button 
-          onClick={() => navigate(-1)} 
-          className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 transition-colors font-medium group"
-        >
-          <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          Back to Orders
-        </button>
-        
-        <Button onClick={() => navigate(`/orders/edit/${id}`)}>
-          Edit Order
-        </Button>
+      <div className="max-w-7xl mx-auto mb-8 flex items-center justify-between">
+        <div>
+          <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-indigo-600 mb-2 transition-colors font-medium">
+            <ArrowLeftIcon className="w-4 h-4 mr-1" /> Back
+          </button>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+            {isEditMode ? `Edit Order #${id}` : 'Create New Order'}
+          </h2>
+        </div>
       </div>
 
-      {/* 2. Main Order Detail Card */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        
-        {/* Header Section */}
-        <div className="bg-slate-50 p-8 border-b border-slate-200 flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wider">
-                Retail Order
-              </span>
-              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full uppercase">
-                Completed
-              </span>
-            </div>
-            <h1 className="text-3xl font-extrabold text-slate-900">Order #{order.id}</h1>
-            <p className="text-slate-500 text-lg flex items-center gap-2 mt-1">
-              <CalendarIcon className="w-5 h-5" />
-              {new Date(order.createdAt).toLocaleDateString()} at {new Date(order.createdAt).toLocaleTimeString()}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-slate-400 font-medium">Total Amount</p>
-            <p className="text-4xl font-black text-indigo-600">Rs. {order.total.toLocaleString()}</p>
-          </div>
-        </div>
-
-        {/* 3. Items Table Section */}
-        <div className="p-8 border-b border-slate-100">
-          <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold uppercase text-sm tracking-wider">
-            <ShoppingBagIcon className="w-5 h-5 text-indigo-500" />
-            Order Items ({items.length})
+      <form onSubmit={onSubmit} className="max-w-7xl mx-auto space-y-6 pb-20">
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-50 border-b border-slate-200">
+            <span className="text-sm font-bold text-slate-600 uppercase tracking-widest">Billing Items</span>
           </div>
           
-          <div className="overflow-hidden border border-slate-100 rounded-xl">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">Product</th>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-slate-500 uppercase">Price</th>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-slate-500 uppercase">Qty</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((it, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-4">
-                      <p className="font-bold text-slate-800">{it.item?.name || it.name || "Unknown Item"}</p>
-                      <p className="text-xs text-slate-400 font-mono">ID: {it.itemId}</p>
-                    </td>
-                    <td className="px-4 py-4 text-center text-slate-600">Rs. {it.price}</td>
-                    <td className="px-4 py-4 text-center text-slate-600">x{it.quantity}</td>
-                    <td className="px-4 py-4 text-right font-bold text-slate-800">
-                      Rs. {(it.price * it.quantity).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-6 space-y-4">
+            {items.map((it, idx) => {
+              const filteredProducts = allProducts.filter((p) => Number(p.categoryId) === Number(it.categoryId))
+
+              return (
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-5 rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-indigo-100">
+                  {/* Category Selection */}
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Category</label>
+                    <select value={it.categoryId} onChange={(e) => updateItem(idx, 'categoryId', e.target.value)} className="w-full p-2.5 bg-slate-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option value="">Select</option>
+                      {allCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Item Selection (FIXED: Value matches UpperCase state) */}
+                  <div className="md:col-span-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Item Name</label>
+                    <select 
+                      disabled={!it.categoryId} 
+                      value={it.name} 
+                      onChange={(e) => updateItem(idx, 'name', e.target.value)} 
+                      className={`w-full p-2.5 border-none rounded-xl text-sm outline-none transition-all ${!it.categoryId ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50 focus:ring-2 focus:ring-indigo-500'}`}
+                    >
+                      <option value="">{it.categoryId ? `Select Item` : 'Pick Category'}</option>
+                      {filteredProducts.map((p) => (
+                        <option key={p.id} value={p.name.toUpperCase()}>
+                          {p.name.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Stock Display */}
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Available Stock</label>
+                    <div className="space-y-2">
+                      <div className={`p-2.5 rounded-xl text-sm font-bold text-center border ${it.stock <= 0 && it.itemId ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                        {it.itemId ? `${it.stock} Units` : '--'}
+                      </div>
+                      
+                      {it.stock <= 0 && it.itemId && (
+                        <Link 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          to={`/products/${it.itemId}/edit`}
+                          className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors uppercase bg-indigo-50 py-1 rounded-lg border border-indigo-100"
+                        >
+                          <PencilSquareIcon className="w-3 h-3" />
+                          Update Stock
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Input label="Price" type="number" value={it.price} disabled={true} className="bg-slate-100 border-none font-bold text-slate-500 cursor-not-allowed" />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Input label="Qty" type="number" min="1" value={it.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} className="bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+
+                  <div className="md:col-span-1 flex justify-end pb-2">
+                    <button type="button" onClick={() => removeItemRow(idx)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"><TrashIcon className="w-5 h-5" /></button>
+                  </div>
+                </div>
+              )
+            })}
+            <button type="button" onClick={addItemRow} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-medium hover:border-indigo-400 hover:text-indigo-500 transition-all flex items-center justify-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Add New Billing Row
+            </button>
           </div>
         </div>
 
-        {/* 4. Order Metadata Summary */}
-        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/50">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-white shadow-sm rounded-lg text-slate-600 border border-slate-100">
-              <HashtagIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-400 uppercase tracking-tighter">System Reference</p>
-              <p className="text-xl font-mono font-bold text-slate-800 tracking-wider">ORD-{order.id}-{new Date(order.createdAt).getFullYear()}</p>
-            </div>
+        {/* Total & Submit */}
+        <div className="bg-[#0F172A] rounded-3xl p-6 text-white flex flex-col md:flex-row justify-between items-center shadow-2xl">
+          <div>
+            <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">Total Amount</p>
+            <p className="text-4xl font-black text-indigo-400">Rs. {total.toLocaleString()}</p>
           </div>
 
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-white shadow-sm rounded-lg text-slate-600 border border-slate-100">
-              <BanknotesIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-400 uppercase tracking-tighter">Payment Status</p>
-              <p className="text-xl font-bold text-green-600 italic">Fully Paid</p>
-            </div>
+          <div className="flex gap-4 mt-4 md:mt-0">
+            {!isStockAvailable && (
+              <p className="text-red-400 text-xs font-bold self-center mr-4 animate-pulse uppercase">Out of Stock</p>
+            )}
+            <Button type="button" className="bg-slate-800 text-white" onClick={() => navigate('/orders')}>Cancel</Button>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || updateMutation.isPending || !isStockAvailable}
+              className={`px-10 shadow-lg ${!isStockAvailable ? 'bg-slate-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/30'}`}
+            >
+              {isEditMode ? 'Update Order' : 'Complete Order'}
+            </Button>
           </div>
         </div>
-
-        {/* 5. Footer Message */}
-        <div className="bg-slate-100 px-8 py-4 border-t border-slate-200 text-center">
-          <p className="text-xs text-slate-500 font-medium">
-            This order was processed through the Shop Management System. 
-          </p>
-        </div>
-      </div>
+      </form>
     </DashboardLayout>
-  );
+  )
 }

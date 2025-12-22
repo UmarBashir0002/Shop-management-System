@@ -15,6 +15,8 @@ import Profile from "../pages/settings/Profile";
 import Password from "../pages/settings/Password";
 import Preferences from "../pages/settings/Preferences";
 import ProtectedRoute from "../components/ProtectedRoute";
+import CategoryList from "../pages/categories/CategoryList";
+import CategroyForm from "../pages/categories/CategroyForm";
 
 export default function AppRoutes() {
   return (
@@ -39,6 +41,11 @@ export default function AppRoutes() {
       <Route path="/settings/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/settings/password" element={<ProtectedRoute><Password /></ProtectedRoute>} />
       <Route path="/settings/preferences" element={<ProtectedRoute><Preferences /></ProtectedRoute>} />
+
+
+      <Route path="/categories" element={<ProtectedRoute><CategoryList /></ProtectedRoute>} />
+     <Route path="/categories/new" element={<ProtectedRoute><CategroyForm /></ProtectedRoute>} />
+
 
       <Route path="*" element={<div className="p-6">Page not found</div>} />
     </Routes>
