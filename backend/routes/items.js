@@ -1,44 +1,61 @@
 import express from 'express';
 import pkg from '@prisma/client';
-import { authenticateToken } from '../middleware/auth.js'; // your middleware
+import { authenticateToken } from '../middleware/auth.js';
+import { validate } from "../middleware/validate.js";
+import { createItemSchema, updateItemSchema } from "../validators/item.schema.js";
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
-import { validate } from "../middleware/validate.js";
-import { createItemSchema ,updateItemSchema } from "../validators/item.schema.js";
-
 const router = express.Router();
-const ALLOWED_TYPES = ['PRINTER','LAPTOP','ACCESSORY','SERVICE'];
 
 // READ all items
 router.get('/', async (req, res) => {
-  const items = await prisma.item.findMany();
-  res.json(items);
+  try {
+    const items = await prisma.item.findMany({
+      include: { category: true }, // Updated: Include category relation
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching items' });
+  }
 });
 
 // READ single item
 router.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const item = await prisma.item.findUnique({ where: { id } });
+  const item = await prisma.item.findUnique({ 
+    where: { id },
+    include: { category: true } // Updated: Include category relation
+  });
   if (!item) return res.status(404).json({ message: 'Item not found' });
   res.json(item);
 });
 
 // CREATE item (protected)
-router.post('/', authenticateToken, validate(createItemSchema),async (req, res) => {
+router.post('/', authenticateToken, validate(createItemSchema), async (req, res) => {
   try {
-    const { name, brand, type, costPrice, salePrice, quantity } = req.body;
-    if (!name || !type) return res.status(400).json({ message: 'name and type are required' });
-    if (!ALLOWED_TYPES.includes(type)) return res.status(400).json({ message: 'Invalid type' });
-
+    const { name, brand, categoryId, costPrice, salePrice, quantity } = req.body;
+    
+    // Updated: Logic to use categoryId and the new table
     const item = await prisma.item.create({
-      data: { name, brand, type, costPrice, salePrice, quantity, isActive: true }
+      data: { 
+        name, 
+        brand, 
+        categoryId: Number(categoryId), // Link to new Category table
+        costPrice, 
+        salePrice, 
+        quantity, 
+        isActive: true,
+        type: "" // Maintaining for schema compatibility
+      },
+      include: { category: true }
     });
 
     res.status(201).json(item);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -46,12 +63,17 @@ router.post('/', authenticateToken, validate(createItemSchema),async (req, res) 
 router.patch('/:id', authenticateToken, validate(updateItemSchema), async (req, res) => {
   const id = Number(req.params.id);
   try {
-    const data = req.body;
-    if (data.type && !ALLOWED_TYPES.includes(data.type)) return res.status(400).json({ message: 'Invalid type' });
+    const data = { ...req.body };
+    
+    // Updated: Handle categoryId conversion if present in update
+    if (data.categoryId) {
+      data.categoryId = Number(data.categoryId);
+    }
 
     const item = await prisma.item.update({
       where: { id },
       data,
+      include: { category: true }
     });
 
     res.json(item);
@@ -63,7 +85,6 @@ router.patch('/:id', authenticateToken, validate(updateItemSchema), async (req, 
 
 // DELETE item (protected)
 router.delete('/:id', authenticateToken, async (req, res) => {
-  // 1. Initialize 'id' at the very top
   const id = Number(req.params.id);
 
   if (isNaN(id)) {
@@ -71,27 +92,21 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 
   try {
-    // 2. Check OrderItem table (from your schema) to see if item was ever sold
     const usageCount = await prisma.orderItem.count({
       where: { itemId: id }
     });
 
     if (usageCount > 0) {
-      // 3. If used in an order, don't delete. Suggest deactivation.
       return res.status(400).json({ 
         message: "This item is linked to existing orders and cannot be deleted. Set it to 'Inactive' instead." 
       });
     }
 
-    // 4. If not used, proceed with deletion
-    await prisma.item.delete({
-      where: { id }
-    });
-
+    await prisma.item.delete({ where: { id } });
     res.json({ message: 'Item deleted successfully' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error', error: String(err) });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

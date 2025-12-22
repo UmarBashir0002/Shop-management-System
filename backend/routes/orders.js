@@ -8,12 +8,20 @@ const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// CREATE an order
+// Helper to determine order status
+const getStatus = (total, paid) => {
+  const p = parseFloat(paid) || 0;
+  if (p <= 0) return "UNPAID";
+  if (p < total) return "PARTIAL";
+  return "PAID";
+};
+
+// 1. CREATE Order
 router.post('/', authenticateToken, validate(createOrderSchema), async (req, res) => {
-  const { items } = req.body;
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ message: 'Items are required' });
-  }
+  const { items, paidAmount } = req.body;
+  
+  // Safe parsing of the paid amount
+  const parsedPaidAmount = parseFloat(paidAmount) || 0;
 
   try {
     const order = await prisma.$transaction(async (tx) => {
@@ -21,44 +29,61 @@ router.post('/', authenticateToken, validate(createOrderSchema), async (req, res
       const orderItemsData = [];
 
       for (const { itemId, quantity } of items) {
-        const item = await tx.item.findUnique({ where: { id: itemId } });
-        if (!item) throw new Error(`Item ${itemId} not found`);
-        if (item.quantity < quantity) throw new Error(`Insufficient stock for ${item.name}`);
+        const item = await tx.item.findUnique({ where: { id: Number(itemId) } });
+        
+        if (!item) throw new Error(`Item with ID ${itemId} not found`);
+        if (item.quantity < quantity) throw new Error(`Stock error for ${item.name}`);
 
+        // Update Stock
         await tx.item.update({
-          where: { id: itemId },
-          data: { quantity: item.quantity - quantity },
+          where: { id: item.id },
+          data: { quantity: { decrement: Number(quantity) } },
         });
 
-        total += item.salePrice * quantity;
-        orderItemsData.push({ itemId, quantity, price: item.salePrice });
+        total += item.salePrice * Number(quantity);
+        orderItemsData.push({ 
+          itemId: item.id, 
+          quantity: Number(quantity), 
+          price: item.salePrice 
+        });
       }
 
       return await tx.order.create({
         data: {
-          total,
+          total: total,
+          paidAmount: parsedPaidAmount,
+          status: getStatus(total, parsedPaidAmount),
           OrderItem: { create: orderItemsData },
         },
         include: { OrderItem: true },
       });
     });
 
-    res.json({ message: 'Order created', order });
+    res.json({ message: 'Order created successfully', order });
   } catch (error) {
+    console.error("Order Creation Error:", error.message);
     res.status(400).json({ message: error.message });
   }
 });
 
-// GET all orders
+// 2. GET ALL Orders
 router.get('/', authenticateToken, async (req, res) => {
-  const orders = await prisma.order.findMany({
-    include: { OrderItem: { include: { item: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json(orders);
+  try {
+    const orders = await prisma.order.findMany({
+      include: { 
+        OrderItem: { 
+          include: { item: true } 
+        } 
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch orders" });
+  }
 });
 
-// GET ORDER BY ID
+// 3. GET SINGLE Order
 router.get("/:id", authenticateToken, async (req, res) => {
   const orderId = Number(req.params.id);
   if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID" });
@@ -67,20 +92,24 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        OrderItem: { include: { item: { select: { id: true, name: true, brand: true } } } },
+        OrderItem: { 
+          include: { 
+            item: true 
+          } 
+        },
       },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json(order);
   } catch (error) {
-    res.status(500).json({ message: "Failed to fetch order" });
+    res.status(500).json({ message: "Failed to fetch order details" });
   }
 });
 
-// UPDATE an order (Reverses stock, deletes old items, creates new ones)
+// 4. UPDATE Order
 router.put('/:id', authenticateToken, validate(createOrderSchema), async (req, res) => {
   const orderId = Number(req.params.id);
-  const { items } = req.body;
+  const { items, paidAmount } = req.body;
 
   try {
     const updatedOrder = await prisma.$transaction(async (tx) => {
@@ -88,9 +117,10 @@ router.put('/:id', authenticateToken, validate(createOrderSchema), async (req, r
         where: { id: orderId },
         include: { OrderItem: true }
       });
+      
       if (!existingOrder) throw new Error("Order not found");
 
-      // 1. Restore old stock
+      // 1. Restore old stock before applying new changes
       for (const oldItem of existingOrder.OrderItem) {
         await tx.item.update({
           where: { id: oldItem.itemId },
@@ -98,38 +128,46 @@ router.put('/:id', authenticateToken, validate(createOrderSchema), async (req, r
         });
       }
 
-      // 2. Clear old items
+      // 2. Delete old items
       await tx.orderItem.deleteMany({ where: { orderId } });
 
-      // 3. Process new items
+      // 3. Process new items and calculate new total
       let newTotal = 0;
       const newItemsData = [];
       for (const { itemId, quantity } of items) {
-        const item = await tx.item.findUnique({ where: { id: itemId } });
-        if (!item || item.quantity < quantity) throw new Error(`Stock error for item ${itemId}`);
+        const item = await tx.item.findUnique({ where: { id: Number(itemId) } });
+        if (!item || item.quantity < quantity) throw new Error(`Stock error for ${item?.name || 'Unknown Item'}`);
         
         await tx.item.update({
-          where: { id: itemId },
-          data: { quantity: { decrement: quantity } }
+          where: { id: item.id },
+          data: { quantity: { decrement: Number(quantity) } }
         });
 
-        newTotal += item.salePrice * quantity;
-        newItemsData.push({ itemId, quantity, price: item.salePrice });
+        newTotal += item.salePrice * Number(quantity);
+        newItemsData.push({ itemId: item.id, quantity: Number(quantity), price: item.salePrice });
       }
+
+      // 4. Determine final paid amount and status
+      const finalPaid = paidAmount !== undefined ? parseFloat(paidAmount) : existingOrder.paidAmount;
 
       return await tx.order.update({
         where: { id: orderId },
-        data: { total: newTotal, OrderItem: { create: newItemsData } },
+        data: { 
+          total: newTotal, 
+          paidAmount: finalPaid,
+          status: getStatus(newTotal, finalPaid),
+          OrderItem: { create: newItemsData } 
+        },
         include: { OrderItem: true }
       });
     });
-    res.json({ message: 'Order updated', order: updatedOrder });
+    res.json({ message: 'Order updated successfully', order: updatedOrder });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
-// DELETE an order (Reverses stock before deleting)
+// 5. DELETE Order
 router.delete('/:id', authenticateToken, async (req, res) => {
   const orderId = Number(req.params.id);
 
@@ -139,9 +177,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         where: { id: orderId },
         include: { OrderItem: true }
       });
+
       if (!order) throw new Error("Order not found");
 
-      // Reverse stock
+      // Restore stock
       for (const item of order.OrderItem) {
         await tx.item.update({
           where: { id: item.itemId },
@@ -149,7 +188,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         });
       }
 
-      // Delete OrderItems first (if not set to Cascade in Prisma)
       await tx.orderItem.deleteMany({ where: { orderId } });
       await tx.order.delete({ where: { id: orderId } });
     });

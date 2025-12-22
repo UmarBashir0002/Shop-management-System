@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const itemTypes = ["PRINTER", "LAPTOP", "ACCESSORY", "SERVICE"];
+// Removed hardcoded itemTypes array as categories are now dynamic in the DB
 
 export const createItemSchema = z.object({
   name: z
@@ -11,11 +11,11 @@ export const createItemSchema = z.object({
     .string()
     .min(1, { message: "brand is required" }),
 
-  type: z
-    .string()
-    .refine(val => itemTypes.includes(val), {
-      message: "type must be PRINTER, LAPTOP, ACCESSORY, or SERVICE",
-    }),
+  // Updated: categoryId validation (accepts number or string, ensures it's not empty)
+  categoryId: z.union([
+    z.number().positive({ message: "Invalid category ID" }),
+    z.string().min(1, { message: "Category is required" })
+  ]),
 
   costPrice: z
     .number({ invalid_type_error: "costPrice must be a number" })
@@ -33,18 +33,15 @@ export const createItemSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-
-
 export const updateItemSchema = z.object({
   name: z.string().min(1, { message: "name cannot be empty" }).optional(),
   brand: z.string().min(1, { message: "brand cannot be empty" }).optional(),
 
-  type: z
-    .string()
-    .refine(val => itemTypes.includes(val), {
-      message: "type must be PRINTER, LAPTOP, ACCESSORY, or SERVICE",
-    })
-    .optional(),
+  // Updated: categoryId is optional for updates
+  categoryId: z.union([
+    z.number().positive(),
+    z.string().min(1)
+  ]).optional(),
 
   costPrice: z.number().nonnegative({ message: "costPrice cannot be negative" }).optional(),
   salePrice: z.number().nonnegative({ message: "salePrice cannot be negative" }).optional(),

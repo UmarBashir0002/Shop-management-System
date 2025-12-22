@@ -16,4 +16,10 @@ export const createOrderSchema = z.object({
       })
     )
     .min(1, { message: "Order must contain at least one item" }),
+
+  // Added paidAmount validation
+  paidAmount: z
+    .number({ invalid_type_error: "paidAmount must be a number" })
+    .min(0, { message: "Paid amount cannot be negative" })
+    .default(0),
 });

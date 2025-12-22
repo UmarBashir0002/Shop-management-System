@@ -14,25 +14,37 @@ model user {
   createdAt DateTime @default(now())
 }
 
-model item {
-  id        Int      @id @default(autoincrement())
-  name      String
-  brand     String
-  type      String           // store PRINTER|LAPTOP|ACCESSORY|SERVICE as text
-  costPrice Float
-  salePrice Float
-  quantity  Int
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  OrderItem OrderItem[]
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  items item[]
+}
 
+model item {
+  id          Int         @id @default(autoincrement())
+  name        String
+  brand       String
+  type        String      // Keep this to avoid breaking existing data
+  
+  // Add these as optional (?) fields
+  categoryId  Int?        
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  
+  costPrice   Float
+  salePrice   Float
+  quantity    Int
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  OrderItem   OrderItem[]
 }
 model Order {
-  id        Int        @id @default(autoincrement())
-  createdAt DateTime   @default(now())
-  total     Float
-  OrderItem OrderItem[]
+  id          Int         @id @default(autoincrement())
+  createdAt   DateTime    @default(now())
+  total       Float
+  paidAmount  Float       @default(0)
+  status      String      @default("PAID") // "PAID", "PARTIAL", "UNPAID"
+  OrderItem   OrderItem[]
 }
 
 model OrderItem {
@@ -46,12 +58,4 @@ model OrderItem {
   item  item  @relation(fields: [itemId], references: [id])
 }
 
-model printJob {
-  id             Int      @id @default(autoincrement())
-  customer_name  String?
-  pages          Int      @default(0)
-  rate           Float?
-  total_amount   Float?
-  payment_status String   @default("PAID")
-  date           DateTime @default(now())
-}
+

@@ -8,6 +8,8 @@ import itemsRoutes from './routes/items.js';
 import stockRoutes from './routes/stock.js';
 import orderRoutes from './routes/orders.js';
 import printJobRoutes from './routes/printJobs.js';
+import categoryRoutes from './routes/category.js';
+
 import reports from './routes/reports.js';
 import helmet from "helmet";
 
@@ -27,6 +29,8 @@ app.use('/stock', stockRoutes);
 app.use('/orders', orderRoutes);
 app.use('/printJobs', printJobRoutes);
 app.use('/reports', reports);
+app.use('/category', categoryRoutes);
+
 app.use(helmet());
 
 
