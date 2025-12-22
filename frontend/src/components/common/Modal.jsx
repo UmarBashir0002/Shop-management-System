@@ -1,16 +1,17 @@
 // src/components/common/Modal.jsx
-import { Dialog } from '@headlessui/react'
+import React from "react";
 
-export default function Modal({ open, onClose, title, children }) {
+export default function Modal({ open, onClose, children, title }) {
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="mx-auto max-w-lg w-full bg-white rounded shadow-lg p-6">
-          {title && <Dialog.Title className="text-lg font-semibold mb-3">{title}</Dialog.Title>}
-          {children}
-        </Dialog.Panel>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        <div className="p-4">{children}</div>
       </div>
-    </Dialog>
-  )
+    </div>
+  );
 }

@@ -1,9 +1,10 @@
 // src/components/common/Loader.jsx
-export default function Loader({ size = 5, text = '' }) {
+import React from "react";
+
+export default function Loader({ size = 6 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className={`animate-spin rounded-full border-4 border-t-transparent border-gray-300 w-${size} h-${size}`} />
-      {text && <span>{text}</span>}
+    <div className="flex items-center justify-center p-4">
+      <div className={`animate-spin rounded-full h-${size} w-${size} border-b-2 border-indigo-600`} />
     </div>
-  )
+  );
 }

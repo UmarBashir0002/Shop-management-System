@@ -1,7 +1,15 @@
-import AppRoutes from './routes'
+// src/App.jsx
+import React from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import queryClient from "./queryClient";
+import AppRoutes from "./routes";
+import { Toaster } from "react-hot-toast";
 
-function App() {
-  return <AppRoutes />
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppRoutes />
+      <Toaster position="top-right" />
+    </QueryClientProvider>
+  );
 }
-
-export default App

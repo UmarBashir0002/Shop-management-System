@@ -63,13 +63,35 @@ router.patch('/:id', authenticateToken, validate(updateItemSchema), async (req, 
 
 // DELETE item (protected)
 router.delete('/:id', authenticateToken, async (req, res) => {
+  // 1. Initialize 'id' at the very top
   const id = Number(req.params.id);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ message: "Invalid ID provided" });
+  }
+
   try {
-    await prisma.item.delete({ where: { id } });
-    res.json({ message: 'Item deleted' });
+    // 2. Check OrderItem table (from your schema) to see if item was ever sold
+    const usageCount = await prisma.orderItem.count({
+      where: { itemId: id }
+    });
+
+    if (usageCount > 0) {
+      // 3. If used in an order, don't delete. Suggest deactivation.
+      return res.status(400).json({ 
+        message: "This item is linked to existing orders and cannot be deleted. Set it to 'Inactive' instead." 
+      });
+    }
+
+    // 4. If not used, proceed with deletion
+    await prisma.item.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Item deleted successfully' });
   } catch (err) {
     console.error(err);
-    res.status(400).json({ message: 'Delete failed', error: String(err) });
+    res.status(500).json({ message: 'Server error', error: String(err) });
   }
 });
 

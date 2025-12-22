@@ -1,14 +1,14 @@
-import { configureStore } from '@reduxjs/toolkit'
-import authReducer from './authSlice'
-import uiReducer from './uiSlice'
+// src/store/index.js
+import { configureStore } from "@reduxjs/toolkit";
+import authReducer from "./authSlice";
+import uiReducer from "./uiSlice";
 
-export const store = configureStore({
+const store = configureStore({
   reducer: {
     auth: authReducer,
     ui: uiReducer,
   },
   devTools: import.meta.env.DEV,
-})
+});
 
-// optional typed hooks (if you use TypeScript skip this file)
-export default store
+export default store;

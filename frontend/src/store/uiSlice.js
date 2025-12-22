@@ -1,25 +1,22 @@
-import { createSlice } from '@reduxjs/toolkit'
+// src/store/uiSlice.js
+import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  globalLoading: false,
-  toastMessage: null,
-}
+  sidebarOpen: true,
+};
 
 const uiSlice = createSlice({
-  name: 'ui',
+  name: "ui",
   initialState,
   reducers: {
-    setGlobalLoading: (state, action) => {
-      state.globalLoading = action.payload
+    toggleSidebar(state) {
+      state.sidebarOpen = !state.sidebarOpen;
     },
-    setToastMessage: (state, action) => {
-      state.toastMessage = action.payload
-    },
-    clearToast: (state) => {
-      state.toastMessage = null
+    setSidebar(state, action) {
+      state.sidebarOpen = !!action.payload;
     },
   },
-})
+});
 
-export const { setGlobalLoading, setToastMessage, clearToast } = uiSlice.actions
-export default uiSlice.reducer
+export const { toggleSidebar, setSidebar } = uiSlice.actions;
+export default uiSlice.reducer;

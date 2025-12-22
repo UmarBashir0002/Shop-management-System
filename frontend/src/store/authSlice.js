@@ -1,39 +1,36 @@
-import { createSlice } from '@reduxjs/toolkit'
+// src/store/authSlice.js
+import { createSlice } from "@reduxjs/toolkit";
 
-// load token from localStorage (simple persistence)
-const tokenFromStorage = localStorage.getItem('auth_token') || null
-const userFromStorage = localStorage.getItem('auth_user')
-  ? JSON.parse(localStorage.getItem('auth_user'))
-  : null
+const persisted = JSON.parse(localStorage.getItem("shop_auth") || "null");
 
-const initialState = {
-  token: tokenFromStorage,
-  user: userFromStorage,
-}
+const initialState = persisted || {
+  user: null,
+  token: null,
+  isAuthenticated: false,
+};
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
-    setCredentials: (state, action) => {
-      const { token, user } = action.payload
-      state.token = token
-      state.user = user ?? state.user
-      if (token) localStorage.setItem('auth_token', token)
-      if (user) localStorage.setItem('auth_user', JSON.stringify(user))
+    setCredentials(state, action) {
+      const { user, token } = action.payload || {};
+      state.user = user ?? state.user;
+      state.token = token ?? state.token;
+      state.isAuthenticated = !!(state.token);
+      localStorage.setItem(
+        "shop_auth",
+        JSON.stringify({ user: state.user, token: state.token })
+      );
     },
-    setUser: (state, action) => {
-      state.user = action.payload
-      localStorage.setItem('auth_user', JSON.stringify(action.payload))
-    },
-    logout: (state) => {
-      state.token = null
-      state.user = null
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('auth_user')
+    logout(state) {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      localStorage.removeItem("shop_auth");
     },
   },
-})
+});
 
-export const { setCredentials, setUser, logout } = authSlice.actions
-export default authSlice.reducer
+export const { setCredentials, logout } = authSlice.actions;
+export default authSlice.reducer;
