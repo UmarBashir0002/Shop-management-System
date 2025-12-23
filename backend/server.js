@@ -9,6 +9,7 @@ import stockRoutes from './routes/stock.js';
 import orderRoutes from './routes/orders.js';
 import printJobRoutes from './routes/printJobs.js';
 import categoryRoutes from './routes/category.js';
+// import userRoutes from "./routes/user.routes.js";
 
 import reports from './routes/reports.js';
 import helmet from "helmet";
@@ -16,7 +17,6 @@ import helmet from "helmet";
 
 
 
-console.log("loaded")
 
 const app = express();
 app.use(cors());
@@ -30,6 +30,7 @@ app.use('/orders', orderRoutes);
 app.use('/printJobs', printJobRoutes);
 app.use('/reports', reports);
 app.use('/category', categoryRoutes);
+// app.use("/users", userRoutes);
 
 app.use(helmet());
 

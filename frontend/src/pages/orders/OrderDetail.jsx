@@ -1,251 +1,288 @@
-import React, { useState, useMemo } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import React, { useMemo, useRef, forwardRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useReactToPrint } from 'react-to-print'
 import DashboardLayout from '../../components/layout/DashboardLayout'
-import Button from '../../components/common/Button'
 import Loader from '../../components/common/Loader'
-import Input from '../../components/common/Input'
-import { useOrderQuery, useCreateOrder, useUpdateOrder } from '../../hooks/useOrders'
-import { useItemsQuery } from '../../hooks/useProducts'
-import { useCategoriesQuery } from '../../hooks/useCategories'
 import { 
-  PlusIcon, 
-  TrashIcon, 
   ArrowLeftIcon, 
-  PencilSquareIcon 
+  PrinterIcon, 
+  CheckBadgeIcon,
+  BanknotesIcon,
+  ExclamationCircleIcon,
+  ScaleIcon
 } from '@heroicons/react/24/outline'
-import toast from 'react-hot-toast'
+import { useOrderQuery } from '../../hooks/useOrders'
 
-export default function OrderForm() {
-  const { id } = useParams()
-  const isEditMode = Boolean(id)
-  const navigate = useNavigate()
-
-  const { data: order, isLoading: orderLoading } = useOrderQuery(id)
-  const { data: products, isLoading: productsLoading } = useItemsQuery()
-  const { data: categories, isLoading: categoriesLoading } = useCategoriesQuery()
-
-  const createMutation = useCreateOrder()
-  const updateMutation = useUpdateOrder()
-
-  const [items, setItems] = useState([])
-  const [lastSyncedId, setLastSyncedId] = useState(null)
-
-  const allProducts = useMemo(() => products?.data || products || [], [products])
-  const allCategories = useMemo(() => categories || [], [categories])
-
-  /**
-   * DATA SYNCHRONIZATION
-   * Ensures 'name' is Uppercase to match dropdown values and selects the correct category
-   */
-  if (isEditMode && order && allProducts.length > 0 && lastSyncedId !== id) {
-    const backendItems = order.items ?? order.OrderItem ?? []
-    const mappedItems = backendItems.map((it) => {
-      const matchedProduct = allProducts.find((p) => p.id === it.itemId)
-      
-      return {
-        itemId: it.itemId ?? '',
-        // Use the categoryId from the product master list to ensure filtering works
-        categoryId: matchedProduct?.categoryId ?? it.item?.categoryId ?? '',
-        // Force Uppercase to ensure the <select> matches the <option value="...">
-        name: (matchedProduct?.name || it.name || '').toUpperCase(),
-        price: it.price ?? 0,
-        quantity: it.quantity ?? 1,
-        stock: matchedProduct?.quantity ?? 0,
-      }
-    })
-    
-    setItems(mappedItems)
-    setLastSyncedId(id)
-  }
-
-  const addItemRow = () =>
-    setItems((prev) => [...prev, { itemId: '', name: '', categoryId: '', price: 0, quantity: 1, stock: 0 }])
-
-  const removeItemRow = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx))
-
-  const updateItem = (idx, field, value) => {
-    setItems((prev) => {
-      const copy = [...prev]
-      let updatedRow = { ...copy[idx], [field]: value }
-
-      if (field === 'categoryId') {
-        updatedRow.itemId = ''; updatedRow.name = ''; updatedRow.price = 0; updatedRow.stock = 0;
-      }
-
-      if (field === 'name') {
-        // Find product by comparing Uppercase names
-        const selectedProd = allProducts.find((p) => p.name.toUpperCase() === value.toUpperCase())
-        if (selectedProd) {
-          updatedRow.itemId = selectedProd.id
-          updatedRow.price = selectedProd.salePrice
-          updatedRow.stock = selectedProd.quantity
-          updatedRow.name = selectedProd.name.toUpperCase()
-        }
-      }
-
-      copy[idx] = updatedRow
-      return copy
-    })
-  }
-
-  const total = useMemo(
-    () => items.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0),
-    [items]
-  )
-
-  const isStockAvailable = useMemo(() => {
-    if (items.length === 0) return true
-    return items.every(it => {
-      if (!it.itemId) return true 
-      return it.stock > 0 && Number(it.quantity) <= it.stock
-    })
-  }, [items])
-
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    if (!isStockAvailable) return toast.error('Check item availability')
-    
-    const validItems = items.filter((i) => i.itemId && Number(i.quantity) > 0)
-    if (!validItems.length) return toast.error('Add at least one item')
-
-    const payload = {
-      items: validItems.map((i) => ({ itemId: Number(i.itemId), quantity: Number(i.quantity) })),
-    }
-
-    try {
-      if (isEditMode) await updateMutation.mutateAsync({ id, payload })
-      else await createMutation.mutateAsync(payload)
-      navigate('/orders')
-      toast.success(isEditMode ? 'Order updated' : 'Order completed')
-    } catch (err) {
-      return err
-    }
-  }
-
-  if ((isEditMode && orderLoading) || productsLoading || categoriesLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex justify-center py-20"><Loader /></div>
-      </DashboardLayout>
-    )
-  }
+// --- 1. THE NARROW SLIP COMPONENT ---
+const PrintableReceipt = forwardRef(({ order, metrics }, ref) => {
+  if (!order) return null;
+  const items = order?.items ?? order?.OrderItem ?? [];
 
   return (
-    <DashboardLayout>
-      <div className="max-w-7xl mx-auto mb-8 flex items-center justify-between">
-        <div>
-          <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-indigo-600 mb-2 transition-colors font-medium">
-            <ArrowLeftIcon className="w-4 h-4 mr-1" /> Back
-          </button>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-            {isEditMode ? `Edit Order #${id}` : 'Create New Order'}
-          </h2>
+    <div ref={ref} className="thermal-slip">
+      {/* HEADER */}
+      <div className="receipt-header">
+        <h1>Machine Traders</h1>
+        <p>1st Floor City Plaza College Road</p>
+        <p>Rawalpindi. Tel: 051-5775470-71</p>
+      </div>
+
+      {/* METADATA */}
+      <div className="receipt-row font-bold border-b-dashed">
+        <span>SO: {order.id}</span>
+        <span>Date: {new Date(order.createdAt).toLocaleDateString()}</span>
+      </div>
+      <div className="receipt-row italic">
+        <span>Customer: {order.customerName || 'Walk-in'}</span>
+      </div>
+
+      {/* TABLE */}
+      <table className="receipt-table">
+        <thead>
+          <tr>
+            <th>Sr.</th>
+            <th>Particulars</th>
+            <th>Qty</th>
+            <th>Rate</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it, idx) => (
+            <tr key={idx}>
+              <td>{idx + 1}</td>
+              <td className="text-left font-bold">{it.item?.name || it.name}</td>
+              <td>{it.quantity}</td>
+              <td>{it.price}</td>
+              <td className="font-bold">{(it.quantity * it.price).toFixed(0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* TOTALS */}
+      <div className="receipt-totals">
+        <div className="receipt-row">
+          <span>Total Item Qty:</span>
+          <span>{items.reduce((acc, curr) => acc + curr.quantity, 0)}</span>
+        </div>
+        <div className="receipt-row grand-total">
+          <span>Total Bill:</span>
+          <span>Rs. {metrics.total.toLocaleString()}</span>
+        </div>
+        <div className="receipt-row font-bold">
+          <span>Received Amount:</span>
+          <span>Rs. {metrics.paid.toLocaleString()}</span>
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="max-w-7xl mx-auto space-y-6 pb-20">
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 bg-slate-50 border-b border-slate-200">
-            <span className="text-sm font-bold text-slate-600 uppercase tracking-widest">Billing Items</span>
-          </div>
+      {/* STAMP */}
+      <div className="stamp-container">
+        <div className="paid-stamp">
+          PAID
+          <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <div className="receipt-footer">
+        <p>DEALS IN PHOTO COPIERS, PRINTERS, TONERS, DRUMS & INK</p>
+        <p className="font-bold underline uppercase">House of Office Equipments</p>
+      </div>
+
+      {/* CSS STYLES FOR NARROW PRINTING */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media screen {
+          .thermal-slip { display: none; }
+        }
+        @media print {
+          @page { 
+            size: 80mm auto; 
+            margin: 0; 
+          }
+          body { 
+            margin: 0; 
+            padding: 0;
+            -webkit-print-color-adjust: exact; 
+          }
+          .thermal-slip {
+            display: block !important;
+            width: 72mm; /* Slightly less than 80mm to account for printer margins */
+            padding: 4mm;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 10pt;
+            color: #000;
+            background: #fff;
+            margin: 0 auto;
+          }
+          .receipt-header { text-align: center; border-bottom: 2px solid #000; margin-bottom: 5px; padding-bottom: 5px; }
+          .receipt-header h1 { font-size: 16pt; margin: 0; text-transform: uppercase; font-weight: 900; }
+          .receipt-header p { font-size: 8pt; margin: 0; }
           
-          <div className="p-6 space-y-4">
-            {items.map((it, idx) => {
-              const filteredProducts = allProducts.filter((p) => Number(p.categoryId) === Number(it.categoryId))
+          .receipt-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 9pt; }
+          .border-b-dashed { border-bottom: 1px dashed #000; margin-bottom: 5px; padding-bottom: 2px; }
+          
+          .receipt-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+          .receipt-table th { border-bottom: 1px solid #000; text-align: left; font-size: 8pt; padding: 2px 0; }
+          .receipt-table td { font-size: 9pt; padding: 4px 0; text-align: center; vertical-align: top; }
+          .receipt-table .text-left { text-align: left; }
+          
+          .grand-total { border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0; font-size: 12pt; font-weight: 900; margin: 5px 0; }
+          
+          .stamp-container { text-align: center; padding: 20px 0; }
+          .paid-stamp { 
+            display: inline-block; border: 3px solid rgba(220, 38, 38, 0.6); color: rgba(220, 38, 38, 0.6);
+            padding: 5px 15px; border-radius: 10px; font-weight: 900; font-size: 20pt; transform: rotate(-15deg); 
+          }
+          .paid-stamp span { display: block; font-size: 8pt; border-top: 1px solid rgba(220, 38, 38, 0.4); }
 
-              return (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-5 rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-indigo-100">
-                  {/* Category Selection */}
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Category</label>
-                    <select value={it.categoryId} onChange={(e) => updateItem(idx, 'categoryId', e.target.value)} className="w-full p-2.5 bg-slate-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
-                      <option value="">Select</option>
-                      {allCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                    </select>
-                  </div>
+          .receipt-footer { text-align: center; font-size: 7pt; margin-top: 10px; border-top: 1px solid #000; padding-top: 5px; }
+          /* Hide standard elements */
+          nav, header, footer, .no-print, .dashboard-nav, button { display: none !important; }
+        }
+      `}} />
+    </div>
+  );
+});
 
-                  {/* Item Selection (FIXED: Value matches UpperCase state) */}
-                  <div className="md:col-span-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Item Name</label>
-                    <select 
-                      disabled={!it.categoryId} 
-                      value={it.name} 
-                      onChange={(e) => updateItem(idx, 'name', e.target.value)} 
-                      className={`w-full p-2.5 border-none rounded-xl text-sm outline-none transition-all ${!it.categoryId ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50 focus:ring-2 focus:ring-indigo-500'}`}
-                    >
-                      <option value="">{it.categoryId ? `Select Item` : 'Pick Category'}</option>
-                      {filteredProducts.map((p) => (
-                        <option key={p.id} value={p.name.toUpperCase()}>
-                          {p.name.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+// --- 2. MAIN PAGE (Design Kept Exactly Same) ---
+export default function OrderDetail() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const printRef = useRef()
+  const { data: order, isLoading } = useOrderQuery(id)
 
-                  {/* Stock Display */}
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">Available Stock</label>
-                    <div className="space-y-2">
-                      <div className={`p-2.5 rounded-xl text-sm font-bold text-center border ${it.stock <= 0 && it.itemId ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                        {it.itemId ? `${it.stock} Units` : '--'}
-                      </div>
-                      
-                      {it.stock <= 0 && it.itemId && (
-                        <Link 
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          to={`/products/${it.itemId}/edit`}
-                          className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors uppercase bg-indigo-50 py-1 rounded-lg border border-indigo-100"
-                        >
-                          <PencilSquareIcon className="w-3 h-3" />
-                          Update Stock
-                        </Link>
-                      )}
-                    </div>
-                  </div>
+  const orderItems = useMemo(() => order?.items ?? order?.OrderItem ?? [], [order])
+  
+  const metrics = useMemo(() => {
+    const total = orderItems.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
+    const paid = Number(order?.paidAmount || 0)
+    const balance = total - paid
+    const percentage = total > 0 ? (paid / total) * 100 : 0
+    
+    return { total, paid, balance, percentage }
+  }, [orderItems, order])
 
-                  <div className="md:col-span-2">
-                    <Input label="Price" type="number" value={it.price} disabled={true} className="bg-slate-100 border-none font-bold text-slate-500 cursor-not-allowed" />
-                  </div>
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+  });
 
-                  <div className="md:col-span-2">
-                    <Input label="Qty" type="number" min="1" value={it.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} className="bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
+  if (isLoading) return <DashboardLayout><div className="flex justify-center py-20"><Loader /></div></DashboardLayout>
 
-                  <div className="md:col-span-1 flex justify-end pb-2">
-                    <button type="button" onClick={() => removeItemRow(idx)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"><TrashIcon className="w-5 h-5" /></button>
-                  </div>
-                </div>
-              )
-            })}
-            <button type="button" onClick={addItemRow} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-medium hover:border-indigo-400 hover:text-indigo-500 transition-all flex items-center justify-center gap-2">
-              <PlusIcon className="w-5 h-5" /> Add New Billing Row
+  return (
+    <DashboardLayout>
+      {/* Hidden Print Logic */}
+      <PrintableReceipt ref={printRef} order={order} metrics={metrics} />
+
+      <div className="max-w-6xl mx-auto">
+        {/* HEADER */}
+        <div className="flex flex-wrap items-center justify-between mb-8 gap-4">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate('/orders')} className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 transition-all shadow-sm">
+              <ArrowLeftIcon className="w-5 h-5" />
             </button>
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Order #{id}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`flex h-2 w-2 rounded-full ${metrics.balance > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`}></span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  {metrics.balance > 0 ? 'Payment Incomplete' : 'Settled'}
+                </span>
+              </div>
+            </div>
           </div>
+
+          <button className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 rounded-xl text-white font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
+            <CheckBadgeIcon className="w-4 h-4" /> Update Status
+          </button>
         </div>
 
-        {/* Total & Submit */}
-        <div className="bg-[#0F172A] rounded-3xl p-6 text-white flex flex-col md:flex-row justify-between items-center shadow-2xl">
-          <div>
-            <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">Total Amount</p>
-            <p className="text-4xl font-black text-indigo-400">Rs. {total.toLocaleString()}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-20">
+          
+          {/* LEFT: ITEMS TABLE */}
+          <div className="lg:col-span-8">
+            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200/60 overflow-hidden mb-6">
+              <div className="p-2">
+                <table className="w-full">
+                  <thead className="border-b border-slate-50">
+                    <tr>
+                      <th className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase text-left">Product</th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase text-center">Qty</th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-slate-400 uppercase text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {orderItems.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="px-6 py-4 font-bold text-slate-800">{it.item?.name || it.name}</td>
+                        <td className="px-6 py-4 text-center font-bold text-slate-500">x{it.quantity}</td>
+                        <td className="px-6 py-4 text-right font-black text-slate-900">Rs. {(it.price * it.quantity).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-4 mt-4 md:mt-0">
-            {!isStockAvailable && (
-              <p className="text-red-400 text-xs font-bold self-center mr-4 animate-pulse uppercase">Out of Stock</p>
-            )}
-            <Button type="button" className="bg-slate-800 text-white" onClick={() => navigate('/orders')}>Cancel</Button>
-            <Button
-              type="submit"
-              disabled={createMutation.isPending || updateMutation.isPending || !isStockAvailable}
-              className={`px-10 shadow-lg ${!isStockAvailable ? 'bg-slate-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/30'}`}
+          {/* RIGHT: CRITICAL FINANCIAL DETAILS */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm">
+              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Payment Ledger</h4>
+              
+              <div className="space-y-5">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-100 rounded-lg"><BanknotesIcon className="w-5 h-5 text-slate-600" /></div>
+                    <span className="text-sm font-bold text-slate-600">Grand Total</span>
+                  </div>
+                  <span className="font-black text-slate-900 italic">Rs. {metrics.total.toLocaleString()}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-50 rounded-lg"><CheckBadgeIcon className="w-5 h-5 text-green-600" /></div>
+                    <span className="text-sm font-bold text-slate-600">Amount Paid</span>
+                  </div>
+                  <span className="font-black text-green-600">Rs. {metrics.paid.toLocaleString()}</span>
+                </div>
+
+                <div className={`flex justify-between items-center p-4 rounded-2xl ${metrics.balance > 0 ? 'bg-red-50 ring-1 ring-red-100' : 'bg-slate-50'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${metrics.balance > 0 ? 'bg-white text-red-600' : 'bg-white text-slate-400'}`}>
+                      {metrics.balance > 0 ? <ExclamationCircleIcon className="w-5 h-5" /> : <ScaleIcon className="w-5 h-5" />}
+                    </div>
+                    <span className={`text-sm font-bold ${metrics.balance > 0 ? 'text-red-700' : 'text-slate-600'}`}>Balance Due</span>
+                  </div>
+                  <span className={`font-black text-lg ${metrics.balance > 0 ? 'text-red-600' : 'text-slate-900'}`}>Rs. {metrics.balance.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <div className="flex justify-between text-[10px] font-bold uppercase mb-2">
+                  <span className="text-slate-400 font-black">Collection Progress</span>
+                  <span className="text-indigo-600">{metrics.percentage.toFixed(0)}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-1000 ${metrics.balance > 0 ? 'bg-amber-400' : 'bg-green-500'}`} 
+                    style={{ width: `${metrics.percentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              onClick={handlePrint}
+              className="w-full py-4 bg-[#0F172A] hover:bg-slate-800 text-white rounded-2xl font-bold flex items-center justify-center gap-3 transition-all"
             >
-              {isEditMode ? 'Update Order' : 'Complete Order'}
-            </Button>
+              <PrinterIcon className="w-5 h-5 text-slate-400" />
+              Generate Official Receipt
+            </button>
+
           </div>
         </div>
-      </form>
+      </div>
     </DashboardLayout>
   )
 }

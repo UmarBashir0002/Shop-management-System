@@ -35,6 +35,11 @@ export default function OrderForm() {
   const allProducts = useMemo(() => products?.data || products || [], [products])
   const allCategories = useMemo(() => categories || [], [categories])
 
+  // Get IDs of all currently selected items to exclude them from dropdowns
+  const selectedItemIds = useMemo(() => {
+    return items.map(it => Number(it.itemId)).filter(id => id > 0)
+  }, [items])
+
   // DATA SYNCHRONIZATION
   if (isEditMode && order && allProducts.length > 0 && lastSyncedId !== id) {
     const backendItems = order.items ?? order.OrderItem ?? []
@@ -88,12 +93,7 @@ export default function OrderForm() {
 
   const onSubmit = async (e) => {
     e.preventDefault()
-    
-    // Block submission only for NEW orders if stock is invalid
-    if (!isEditMode && !isStockValid) {
-      return toast.error('Insufficient stock. Please adjust quantities.')
-    }
-    
+    if (!isEditMode && !isStockValid) return toast.error('Insufficient stock. Please adjust quantities.')
     const validItems = items.filter((i) => i.itemId && Number(i.quantity) > 0)
     if (!validItems.length) return toast.error('Add at least one item')
 
@@ -107,9 +107,7 @@ export default function OrderForm() {
       else await createMutation.mutateAsync(payload)
       navigate('/orders')
       toast.success(isEditMode ? 'Order updated' : 'Order completed')
-    } catch (err) {
-      console.error(err)
-    }
+    } catch (err) { console.error(err) }
   }
 
   if ((isEditMode && orderLoading) || productsLoading || categoriesLoading) {
@@ -156,9 +154,13 @@ export default function OrderForm() {
                     className="w-full p-2.5 border-none rounded-xl text-sm font-semibold bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
                   >
                     <option value="">{it.categoryId ? 'Choose Product' : 'Select Category First'}</option>
-                    {allProducts.filter(p => Number(p.categoryId) === Number(it.categoryId)).map((p) => (
-                      <option key={p.id} value={p.name.toUpperCase()}>{p.name.toUpperCase()}</option>
-                    ))}
+                    {allProducts
+                      .filter(p => Number(p.categoryId) === Number(it.categoryId))
+                      .filter(p => !selectedItemIds.includes(Number(p.id)) || Number(p.id) === Number(it.itemId))
+                      .map((p) => (
+                        <option key={p.id} value={p.name.toUpperCase()}>{p.name.toUpperCase()}</option>
+                      ))
+                    }
                   </select>
                 </div>
 

@@ -102,7 +102,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    await prisma.item.delete({ where: { id } });
+    await prisma.item.delete({ where: { id } });  
     res.json({ message: 'Item deleted successfully' });
   } catch (err) {
     console.error(err);

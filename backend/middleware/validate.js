@@ -1,4 +1,4 @@
-import { ZodError } from "zod";
+import { ZodError ,z } from "zod";
 
 
 
@@ -22,3 +22,4 @@ export const validate = (schema, source = "body") => (req, res, next) => {
     });
   }
 };
+

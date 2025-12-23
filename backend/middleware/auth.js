@@ -1,9 +1,7 @@
 import jwt from "jsonwebtoken";
-console.log("Loaded auth.js");
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
-  console.log("authHeader",authHeader)
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {
@@ -12,7 +10,7 @@ export function authenticateToken(req, res, next) {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ message: "Invalid token." });
+      return res.status(403).json({ message: "Session Expires Please Relogin." });
     }
 
     req.user = user; // attaches decoded user info
