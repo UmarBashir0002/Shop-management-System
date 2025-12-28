@@ -1,11 +1,9 @@
 import express from 'express';
-import pkg from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from "../middleware/validate.js";
 import { createItemSchema, updateItemSchema } from "../validators/item.schema.js";
 
-const { PrismaClient } = pkg;
-const prisma = new PrismaClient();
+import prisma from "../prisma/db.js";
 const router = express.Router();
 
 // READ all items

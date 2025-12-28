@@ -1,0 +1,50 @@
+{
+  "name": "shop-management-system",
+  "version": "1.0.0",
+  "description": "Shop Management System",
+  "main": "electron/main.js",
+  "scripts": {
+    "frontend:dev": "cd frontend && npm run dev",
+    "backend:dev": "cd backend && npm start",
+    "electron:dev": "cross-env NODE_ENV=development wait-on http://localhost:5173 && electron .",
+    "dev": "concurrently \"npm run frontend:dev\" \"npm run backend:dev\" \"npm run electron:dev\"",
+    "build:frontend": "cd frontend && npm run build",
+    "package": "npm run build:frontend && electron-builder"
+  },
+  "build": {
+    "appId": "com.umar.shopmanagement",
+    "productName": "ShopManager",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "frontend/dist/**/*",
+      "package.json",
+      "!backend/node_modules",
+      "!frontend/node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/prisma",
+        "to": "prisma",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "wait-on": "^9.0.3"
+  }
+}

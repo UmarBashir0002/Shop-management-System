@@ -9,16 +9,34 @@ import stockRoutes from './routes/stock.js';
 import orderRoutes from './routes/orders.js';
 import printJobRoutes from './routes/printJobs.js';
 import categoryRoutes from './routes/category.js';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 // import userRoutes from "./routes/user.routes.js";
-
 import reports from './routes/reports.js';
 import helmet from "helmet";
 
-
-
-
-
 const app = express();
+
+
+
+const initializeDb = () => {
+  if (process.env.NODE_ENV !== 'development') {
+    const userDataPath = path.join(process.env.APPDATA, 'shop-management-system');
+    const dbPath = path.join(userDataPath, 'database.db');
+
+    if (!fs.existsSync(dbPath)) {
+      console.log("Setting up database for first use...");
+      // Option A: Copy a blank template database from your project
+      const templateDbPath = path.join(process.resourcesPath, 'backend/prisma/database.db');
+      fs.copyFileSync(templateDbPath, dbPath);
+    }
+  }
+};
+
+initializeDb();
+
+
 app.use(cors());
 app.use(express.json());
 

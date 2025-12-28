@@ -1,11 +1,9 @@
 import express from 'express';
-import pkg from '@prisma/client';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from "../middleware/validate.js";
 import { createOrderSchema } from "../validators/order.schema.js";
 
-const { PrismaClient } = pkg;
-const prisma = new PrismaClient();
+import prisma from "../prisma/db.js";
 const router = express.Router();
 
 // Helper to determine order status

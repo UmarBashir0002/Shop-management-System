@@ -1,9 +1,7 @@
 // backend/scripts/createAdmin.js
-import pkg from "@prisma/client";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
-const { PrismaClient } = pkg;
-const prisma = new PrismaClient();
+import prisma from "../prisma/db.js";
 
 /**
  * EDIT THESE DETAILS BEFORE RUNNING
